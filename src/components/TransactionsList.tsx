@@ -3,22 +3,12 @@ import { View, Text, StyleSheet, SectionList, TextInput, TouchableOpacity, Modal
 import { Feather } from '@expo/vector-icons';
 import { Transaction, addTransaction, deleteTransaction, updateTransaction } from '../database/db';
 import { CATEGORIES, getCategoryEmoji } from '../constants/categories';
+import MarketCalculatorRaw from './MarketCalculator';
 
-const LOCAL_DARK_THEME = {
-  mode: 'dark' as const,
-  bg: '#000000',
-  card: '#111111',
-  border: '#222222',
-  text: '#ffffff',
-  muted: '#a1a1aa',
-  muted2: '#71717a',
-  primary: '#9333ea',
-  primarySoft: '#a855f7',
-  primaryLight: '#c084fc',
-  danger: '#ef4444',
-  success: '#10b981',
-  inputBg: '#000000',
-};
+const MarketCalculatorComponent: any =
+  typeof MarketCalculatorRaw === 'function'
+    ? MarketCalculatorRaw
+    : (MarketCalculatorRaw as any)?.default || (MarketCalculatorRaw as any)?.MarketCalculator;
 
 interface ListProps {
   transactions: Transaction[];
@@ -60,9 +50,24 @@ export default function TransactionsList({
   onPrevMonth,
   onExport,
   theme,
-  hourlyRate = 0, // Extração corrigida aqui
+  hourlyRate = 0,
 }: ListProps) {
-  const activeTheme = theme?.bg ? theme : LOCAL_DARK_THEME;
+  const activeTheme = theme?.bg ? theme : {
+    bg: '#000000',
+    card: '#111111',
+    border: '#222222',
+    text: '#ffffff',
+    muted: '#a1a1aa',
+    muted2: '#71717a',
+    primary: '#9333ea',
+    primarySoft: '#a855f7',
+    primaryLight: '#c084fc',
+    danger: '#ef4444',
+    success: '#10b981',
+  };
+
+  const [marketModalVisible, setMarketModalVisible] = useState(false);
+
   const displayTxs = (transactions || []).filter((t) => t && t.category !== 'META_SISTEMA');
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -196,6 +201,11 @@ export default function TransactionsList({
       <View style={styles.header}>
         <Text style={[styles.title, { color: activeTheme.text }]}>Transações</Text>
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          
+          <TouchableOpacity onPress={() => setMarketModalVisible(true)} style={[styles.iconBtn, { backgroundColor: activeTheme.card, borderColor: activeTheme.primary }]}>
+            <Text style={{ fontSize: 16 }}>🛒</Text>
+          </TouchableOpacity>
+
           <TouchableOpacity onPress={onExport} style={[styles.iconBtn, { backgroundColor: activeTheme.card, borderColor: activeTheme.border }]}>
             <Feather name="download" size={20} color={activeTheme.muted} />
           </TouchableOpacity>
@@ -297,7 +307,6 @@ export default function TransactionsList({
                   </TouchableOpacity>
                 </View>
 
-                {/* Cálculo do Custo em Horas de Trabalho */}
                 {isExpense && hourlyRate > 0 && showValues && (
                   <Text style={{ color: activeTheme.primaryLight, fontSize: 11, fontWeight: '700', marginTop: 3 }}>
                     ⏱️ {itemHours < 1 ? `${Math.round(itemHours * 60)} min` : `${itemHours.toFixed(1)}h trabalho`}
@@ -430,6 +439,19 @@ export default function TransactionsList({
           </ScrollView>
         </View>
       </Modal>
+
+      {/* MODAL DA CALCULADORA DE FEIRA */}
+      {typeof MarketCalculatorComponent === 'function' && (
+        <MarketCalculatorComponent
+          visible={marketModalVisible}
+          onClose={() => setMarketModalVisible(false)}
+          onRefresh={onRefresh}
+          theme={activeTheme}
+          showValues={showValues}
+          hourlyRate={hourlyRate}
+        />
+      )}
+
     </View>
   );
 }

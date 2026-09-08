@@ -4,6 +4,16 @@ import { PieChart, LineChart } from 'react-native-chart-kit';
 import { Feather } from '@expo/vector-icons';
 import { Transaction, addTransaction, deleteTransaction } from '../database/db';
 import { CATEGORY_EMOJIS, getCategoryEmoji } from '../constants/categories';
+import MarketCalculatorRaw from './MarketCalculator';
+
+// Validação estrita de componente para evitar o erro "got: object"
+const MarketCalculatorComponent: any =
+  typeof MarketCalculatorRaw === 'function'
+    ? MarketCalculatorRaw
+    : (MarketCalculatorRaw as any)?.default || (MarketCalculatorRaw as any)?.MarketCalculator;
+
+const SafePieChart: any = (PieChart as any)?.default || PieChart;
+const SafeLineChart: any = (LineChart as any)?.default || LineChart;
 
 const screenWidth = Dimensions.get('window').width;
 
@@ -15,25 +25,10 @@ export default function Dashboard({
   monthName = '',
   onNextMonth,
   onPrevMonth,
-  theme = {
-    mode: 'dark' as const,
-    bg: '#000000',
-    card: '#111111',
-    border: '#222222',
-    text: '#ffffff',
-    muted: '#a1a1aa',
-    muted2: '#71717a',
-    primary: '#9333ea',
-    primarySoft: '#a855f7',
-    primaryLight: '#c084fc',
-    danger: '#ef4444',
-    success: '#10b981',
-    warning: '#f59e0b',
-    inputBg: '#000000',
-  },
+  theme,
+  hourlyRate = 0,
 }: any) {
-  const activeTheme = theme || {
-    mode: 'dark',
+  const activeTheme = theme?.bg ? theme : {
     bg: '#000000',
     card: '#111111',
     border: '#222222',
@@ -46,8 +41,9 @@ export default function Dashboard({
     danger: '#ef4444',
     success: '#10b981',
     warning: '#f59e0b',
-    inputBg: '#000000',
   };
+
+  const [marketModalVisible, setMarketModalVisible] = useState(false);
 
   const metaTx = (transactions || []).find((t: any) => t && t.category === 'META_SISTEMA');
   const metaValue = metaTx ? metaTx.amount : 0;
@@ -64,7 +60,6 @@ export default function Dashboard({
   const [isEditingMeta, setIsEditingMeta] = useState(false);
   const [metaInput, setMetaInput] = useState(metaValue ? metaValue.toString() : '');
 
-  // Removidos os useEffect que quebravam o app (getCategoryBudgets e checkGoalAndNotify)
   const handleSaveMeta = () => {
     const newVal = parseFloat(String(metaInput).replace(',', '.'));
     if (isNaN(newVal)) return;
@@ -114,10 +109,11 @@ export default function Dashboard({
   };
 
   const formatMoney = (val: number) => (showValues ? `R$ ${Number(val || 0).toFixed(2)}` : 'R$ •••••');
-  const budgetKeys = [];
 
   return (
     <ScrollView style={[styles.container, { backgroundColor: activeTheme.bg }]} contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+      
+      {/* Header */}
       <View style={styles.header}>
         <View style={styles.brandRow}>
           <View style={[styles.logoMark, { backgroundColor: activeTheme.primary }]}><Text style={styles.logoMarkText}>RB</Text></View>
@@ -125,19 +121,22 @@ export default function Dashboard({
             <Text style={[styles.brandTitle, { color: activeTheme.text }]}>RB <Text style={{ color: activeTheme.primaryLight }}>Finance</Text></Text>
             <Text style={{ color: activeTheme.muted, fontSize: 12 }}>Seu controle na palma da mão.</Text>
           </View>
+
+          <TouchableOpacity onPress={() => setMarketModalVisible(true)} style={[styles.marketBtn, { backgroundColor: activeTheme.card, borderColor: activeTheme.primary }]}>
+            <Text style={{ fontSize: 16 }}>🛒</Text>
+            <Text style={{ color: activeTheme.text, fontSize: 12, fontWeight: 'bold' }}>Feira</Text>
+          </TouchableOpacity>
         </View>
       </View>
 
+      {/* Navegador de Mês */}
       <View style={[styles.monthNav, { backgroundColor: activeTheme.card, borderColor: activeTheme.border }]}>
-        <TouchableOpacity onPress={onPrevMonth} style={styles.monthBtn}>
-          <Feather name="chevron-left" size={24} color={activeTheme.text} />
-        </TouchableOpacity>
+        <TouchableOpacity onPress={onPrevMonth} style={styles.monthBtn}><Feather name="chevron-left" size={24} color={activeTheme.text} /></TouchableOpacity>
         <Text style={[styles.monthText, { color: activeTheme.text }]}>{monthName}</Text>
-        <TouchableOpacity onPress={onNextMonth} style={styles.monthBtn}>
-          <Feather name="chevron-right" size={24} color={activeTheme.text} />
-        </TouchableOpacity>
+        <TouchableOpacity onPress={onNextMonth} style={styles.monthBtn}><Feather name="chevron-right" size={24} color={activeTheme.text} /></TouchableOpacity>
       </View>
 
+      {/* Insights */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 15 }}>
         <View style={[styles.insightCard, { backgroundColor: activeTheme.card, borderColor: activeTheme.border }]}>
           <Text style={{ color: activeTheme.muted, fontSize: 11, fontWeight: '700' }}>MAIOR GASTO</Text>
@@ -156,6 +155,7 @@ export default function Dashboard({
         </View>
       </ScrollView>
 
+      {/* Meta de Gastos */}
       <View style={[styles.metaCard, { backgroundColor: activeTheme.card, borderColor: activeTheme.primary }]}>
         <Text style={[styles.cardTitle, { color: activeTheme.primarySoft }]}>META DE GASTOS DO MÊS</Text>
         {isEditingMeta ? (
@@ -190,6 +190,7 @@ export default function Dashboard({
         )}
       </View>
 
+      {/* Saldo Atual */}
       <View style={[styles.balanceCard, { backgroundColor: activeTheme.card, borderColor: activeTheme.border }]}>
         <View style={styles.cardHeaderRow}>
           <Text style={[styles.cardTitle, { color: activeTheme.primarySoft }]}>SALDO ATUAL</Text>
@@ -213,13 +214,13 @@ export default function Dashboard({
         </View>
       </View>
 
-      {/* Gráficos */}
+      {/* Gráficos com validação de componente */}
       {showValues ? (
         <>
-          {pieData.length > 0 && (
+          {pieData.length > 0 && typeof SafePieChart === 'function' && (
             <View style={[styles.chartCard, { backgroundColor: activeTheme.card, borderColor: activeTheme.border }]}>
               <Text style={[styles.cardTitle, { color: activeTheme.primarySoft }]}>GASTOS POR CATEGORIA</Text>
-              <PieChart
+              <SafePieChart
                 data={pieData}
                 width={screenWidth - 80}
                 height={180}
@@ -248,25 +249,27 @@ export default function Dashboard({
             </View>
           )}
 
-          <View style={[styles.chartCard, { backgroundColor: activeTheme.card, borderColor: activeTheme.border }]}>
-            <Text style={[styles.cardTitle, { color: activeTheme.primarySoft }]}>RECEITAS VS DESPESAS</Text>
-            <LineChart
-              data={lineData}
-              width={screenWidth - 80}
-              height={220}
-              chartConfig={{
-                backgroundColor: activeTheme.card,
-                backgroundGradientFrom: activeTheme.card,
-                backgroundGradientTo: activeTheme.card,
-                decimalPlaces: 0,
-                color: () => activeTheme.primarySoft,
-                labelColor: () => activeTheme.muted,
-                propsForDots: { r: '5', strokeWidth: '2', stroke: activeTheme.bg },
-              }}
-              bezier
-              style={{ marginTop: 15, borderRadius: 12 }}
-            />
-          </View>
+          {typeof SafeLineChart === 'function' && (
+            <View style={[styles.chartCard, { backgroundColor: activeTheme.card, borderColor: activeTheme.border }]}>
+              <Text style={[styles.cardTitle, { color: activeTheme.primarySoft }]}>RECEITAS VS DESPESAS</Text>
+              <SafeLineChart
+                data={lineData}
+                width={screenWidth - 80}
+                height={220}
+                chartConfig={{
+                  backgroundColor: activeTheme.card,
+                  backgroundGradientFrom: activeTheme.card,
+                  backgroundGradientTo: activeTheme.card,
+                  decimalPlaces: 0,
+                  color: () => activeTheme.primarySoft,
+                  labelColor: () => activeTheme.muted,
+                  propsForDots: { r: '5', strokeWidth: '2', stroke: activeTheme.bg },
+                }}
+                bezier
+                style={{ marginTop: 15, borderRadius: 12 }}
+              />
+            </View>
+          )}
         </>
       ) : (
         <View style={[styles.hiddenChartCard, { backgroundColor: activeTheme.card, borderColor: activeTheme.border }]}>
@@ -274,6 +277,19 @@ export default function Dashboard({
           <Text style={{ color: activeTheme.muted, fontWeight: '700', marginTop: 10 }}>Gráficos e valores ocultos.</Text>
         </View>
       )}
+
+      {/* MODAL DA CALCULADORA DE FEIRA */}
+      {typeof MarketCalculatorComponent === 'function' && (
+        <MarketCalculatorComponent
+          visible={marketModalVisible}
+          onClose={() => setMarketModalVisible(false)}
+          onRefresh={onRefresh}
+          theme={activeTheme}
+          showValues={showValues}
+          hourlyRate={hourlyRate}
+        />
+      )}
+
     </ScrollView>
   );
 }
@@ -286,6 +302,7 @@ const styles = StyleSheet.create({
   logoMarkText: { color: '#fff', fontSize: 16, fontWeight: '800' },
   brandTextWrap: { flex: 1 },
   brandTitle: { fontSize: 24, fontWeight: '800' },
+  marketBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, borderWidth: 1 },
   monthNav: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 12, borderRadius: 12, borderWidth: 1, marginBottom: 15 },
   monthText: { fontSize: 16, fontWeight: 'bold' },
   monthBtn: { paddingHorizontal: 10 },
